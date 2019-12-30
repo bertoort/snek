@@ -29,11 +29,20 @@ pub enum Direction {
 }
 
 #[wasm_bindgen]
+extern "C" {
+    // Use `js_namespace` here to bind `console.log(..)` instead of just
+    // `log(..)`
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
+#[wasm_bindgen]
 pub struct Board {
     width: u32,
     height: u32,
     snake: Vec<u32>,
     apple: u32,
+    stop: bool,
     direction: Direction,
     context: web_sys::CanvasRenderingContext2d,
 }
@@ -42,8 +51,9 @@ pub struct Board {
 impl Board {
     pub fn new(element: &str, width: u32, height: u32) -> Board {
         let mut snake = Vec::new();
+        let stop = false;
         for i in 0..4 {
-            snake.push(height + i + 1);
+            snake.push(height + (width * i) + 10);
         }
         let apple = (width * height) - height - 2;
         let document = web_sys::window().unwrap().document().unwrap();
@@ -71,7 +81,8 @@ impl Board {
             snake,
             apple,
             context,
-            direction: Direction::Right,
+            stop,
+            direction: Direction::Left,
         }
     }
     fn get_index(&self, row: u32, column: u32) -> usize {
@@ -84,6 +95,10 @@ impl Board {
             }
         }
         return false;
+    }
+    fn game_over(&mut self) {
+        log(&format!("Game over: {}", self.stop));
+        self.stop = true;
     }
     pub fn draw(&self) {
         self.context.begin_path();
@@ -110,5 +125,42 @@ impl Board {
         }
 
         self.context.stroke()
+    }
+    fn next_position(&self) -> Option<u32> {
+        let head = self.snake.last().unwrap();
+        let hit_top_wall = match self.direction {
+            Direction::Up => &self.width > head,
+            Direction::Left => head == &(0 as u32),
+            _ => false,
+        };
+        if hit_top_wall {
+            return None;
+        }
+        let next = match self.direction {
+            Direction::Right => head + 1,
+            Direction::Left => head - 1,
+            Direction::Up => head - self.width,
+            Direction::Down => head + self.width,
+        };
+        let overlap = self.is_snake(next);
+        let wrap_right = head % self.width == self.width - 1 && next % self.width == 0;
+        let wrap_left = head % self.width == 0 && next % self.width == self.width - 1;
+        let bottom_wall = next > self.width * self.height;
+        if overlap || wrap_right || wrap_left || bottom_wall {
+            return None;
+        }
+        Some(next)
+    }
+    pub fn tick(&mut self) {
+        if self.stop {
+            return;
+        }
+        let next = self.next_position();
+        if next == None {
+            self.game_over();
+        } else {
+            self.snake.remove(0);
+            self.snake.push(next.unwrap());
+        }
     }
 }
