@@ -1,7 +1,9 @@
 mod utils;
 
+use rand::prelude::*;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+extern crate rand;
 extern crate web_sys;
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
@@ -12,7 +14,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 static CELL_SIZE: u32 = 10;
 static BOARD_COLOR: &str = "#B8D0EB";
-static SNAKE_COLOR: &str = "#6F2DBD";
+static SNAKE_COLOR: &str = "#26C485";
 static APPLE_COLOR: &str = "#FF6666";
 static mut DIRECTION: &str = "right";
 
@@ -33,7 +35,7 @@ pub enum Direction {
 #[wasm_bindgen]
 extern "C" {
     // Use `js_namespace` here to bind `console.log(..)` instead of just
-    // `log(..)`
+    // log(&format!("{}", var));
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
 }
@@ -68,6 +70,7 @@ impl Canvas {
         Canvas { game, context }
     }
     pub fn init(&mut self) {
+        self.game.place_apple();
         self.add_key_bindings();
         self.draw();
     }
@@ -80,7 +83,6 @@ impl Canvas {
     }
     fn draw(&self) {
         self.context.begin_path();
-
         for row in 0..self.game.width {
             for col in 0..self.game.height {
                 let idx = self.game.get_index(row, col);
@@ -108,7 +110,6 @@ impl Canvas {
         let document = web_sys::window().unwrap().document().unwrap();
         let change_direction = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
             let key: &str = &event.key();
-            log(&format!("Key down: {}", key));
             unsafe {
                 match key {
                     "w" | "ArrowUp" => DIRECTION = "up",
@@ -142,16 +143,16 @@ impl Game {
         let mut snake = Vec::new();
         let stop = false;
         for i in 0..4 {
-            snake.push(height + (width * i) + 10);
+            snake.push(width + i + 1);
         }
-        let apple = (width * height) - height - 2;
+        let apple = (width * height) + 1;
         Game {
             width,
             height,
             snake,
             apple,
             stop,
-            direction: Direction::Left,
+            direction: Direction::Right,
         }
     }
     fn get_index(&self, row: u32, column: u32) -> usize {
@@ -166,7 +167,6 @@ impl Game {
         return false;
     }
     fn game_over(&mut self) {
-        log(&format!("Game over: {}", self.stop));
         self.stop = true;
     }
     fn next_position(&self) -> Option<u32> {
@@ -200,11 +200,15 @@ impl Game {
         }
         match self.next_position() {
             Some(position) => {
-                self.snake.remove(0);
+                if self.apple == position {
+                    self.place_apple()
+                } else {
+                    self.snake.remove(0);
+                }
                 self.snake.push(position);
             }
             None => self.game_over(),
-        }
+        };
     }
     fn is_valid_direction(&self, dir: &str) -> bool {
         match (dir, self.direction.clone()) {
@@ -227,5 +231,21 @@ impl Game {
             "up" => self.direction = Direction::Up,
             _ => (),
         };
+    }
+    fn place_apple(&mut self) {
+        let available_spots = self.get_available_spots();
+        let mut rng = rand::thread_rng();
+        let random = rng.gen_range(0, available_spots.len());
+        let random_spot = available_spots[random];
+        self.apple = random_spot;
+    }
+    fn get_available_spots(&self) -> Vec<u32> {
+        let mut available_spots = Vec::new();
+        for i in 0..(self.width * self.height) {
+            if !self.is_snake(i) {
+                available_spots.push(i)
+            }
+        }
+        available_spots
     }
 }

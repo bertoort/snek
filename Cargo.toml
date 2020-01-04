@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 js-sys = "0.3.32"
 wasm-bindgen = "0.2"
+rand = { version = "0.6.5", features = ["wasm-bindgen"] }
 
 [dependencies.web-sys]
 version = "0.3"
@@ -27,13 +28,6 @@ features = [
   'Window',
   'DocumentFragment', 
 ]
-
-# `wee_alloc` is a tiny allocator for wasm that is only ~1K in code size
-# compared to the default allocator's ~10K. It is slower than the default
-# allocator, however.
-#
-# Unfortunately, `wee_alloc` requires nightly Rust when targeting wasm for now.
-wee_alloc = { version = "0.4.2", optional = true }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.2"
