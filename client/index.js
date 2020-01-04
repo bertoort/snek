@@ -1,16 +1,17 @@
-import { Board } from 'snek'
+import { Game, Canvas } from 'snek'
 
-const board = Board.new('board', 32, 32)
-board.draw()
+const game = Game.new(32, 32)
+const canvas = Canvas.new('board', game)
+
 let start = null
+canvas.init()
 
 const renderLoop = timestamp => {
   if (!start) start = timestamp
   var progress = timestamp - start
   if (progress > 100) {
     start = timestamp
-    board.tick()
-    board.draw()
+    canvas.update()
   }
   requestAnimationFrame(renderLoop)
 }

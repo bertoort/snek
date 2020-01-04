@@ -37,25 +37,14 @@ extern "C" {
 }
 
 #[wasm_bindgen]
-pub struct Board {
-    width: u32,
-    height: u32,
-    snake: Vec<u32>,
-    apple: u32,
-    stop: bool,
-    direction: Direction,
+pub struct Canvas {
+    game: Game,
     context: web_sys::CanvasRenderingContext2d,
 }
 
 #[wasm_bindgen]
-impl Board {
-    pub fn new(element: &str, width: u32, height: u32) -> Board {
-        let mut snake = Vec::new();
-        let stop = false;
-        for i in 0..4 {
-            snake.push(height + (width * i) + 10);
-        }
-        let apple = (width * height) - height - 2;
+impl Canvas {
+    pub fn new(element: &str, game: Game) -> Canvas {
         let document = web_sys::window().unwrap().document().unwrap();
         let canvas = document.create_element("canvas").unwrap();
         let board = document.get_element_by_id(element).unwrap();
@@ -66,21 +55,77 @@ impl Board {
             .map_err(|_| ())
             .unwrap();
 
-        canvas.set_height((CELL_SIZE + 1) * height + 1);
-        canvas.set_width((CELL_SIZE + 1) * width + 1);
+        canvas.set_height((CELL_SIZE + 1) * &game.height + 1);
+        canvas.set_width((CELL_SIZE + 1) * &game.width + 1);
         let context = canvas
             .get_context("2d")
             .unwrap()
             .unwrap()
             .dyn_into::<web_sys::CanvasRenderingContext2d>()
             .unwrap();
+        Canvas { game, context }
+    }
+    pub fn init(&self) {
+        self.add_key_bindings();
+        self.draw();
+    }
+    pub fn update(&mut self) {
+        self.game.tick();
+        self.draw();
+    }
+    fn draw(&self) {
+        self.context.begin_path();
 
-        Board {
+        for row in 0..self.game.width {
+            for col in 0..self.game.height {
+                let idx = self.game.get_index(row, col);
+                let mut color = BOARD_COLOR;
+                if idx == self.game.apple as usize {
+                    color = APPLE_COLOR;
+                }
+                if self.game.is_snake(idx as u32) {
+                    color = SNAKE_COLOR;
+                }
+                self.context.set_fill_style(&JsValue::from(color));
+
+                self.context.fill_rect(
+                    (col * (CELL_SIZE + 1) + 1) as f64,
+                    (row * (CELL_SIZE + 1) + 1) as f64,
+                    CELL_SIZE as f64,
+                    CELL_SIZE as f64,
+                )
+            }
+        }
+
+        self.context.stroke()
+    }
+    fn add_key_bindings(&self) {}
+}
+
+#[wasm_bindgen]
+pub struct Game {
+    width: u32,
+    height: u32,
+    snake: Vec<u32>,
+    apple: u32,
+    stop: bool,
+    direction: Direction,
+}
+
+#[wasm_bindgen]
+impl Game {
+    pub fn new(width: u32, height: u32) -> Game {
+        let mut snake = Vec::new();
+        let stop = false;
+        for i in 0..4 {
+            snake.push(height + (width * i) + 10);
+        }
+        let apple = (width * height) - height - 2;
+        Game {
             width,
             height,
             snake,
             apple,
-            context,
             stop,
             direction: Direction::Left,
         }
@@ -99,32 +144,6 @@ impl Board {
     fn game_over(&mut self) {
         log(&format!("Game over: {}", self.stop));
         self.stop = true;
-    }
-    pub fn draw(&self) {
-        self.context.begin_path();
-
-        for row in 0..self.width {
-            for col in 0..self.height {
-                let idx = self.get_index(row, col);
-                let mut color = BOARD_COLOR;
-                if idx == self.apple as usize {
-                    color = APPLE_COLOR;
-                }
-                if self.is_snake(idx as u32) {
-                    color = SNAKE_COLOR;
-                }
-                self.context.set_fill_style(&JsValue::from(color));
-
-                self.context.fill_rect(
-                    (col * (CELL_SIZE + 1) + 1) as f64,
-                    (row * (CELL_SIZE + 1) + 1) as f64,
-                    CELL_SIZE as f64,
-                    CELL_SIZE as f64,
-                )
-            }
-        }
-
-        self.context.stroke()
     }
     fn next_position(&self) -> Option<u32> {
         let head = self.snake.last().unwrap();
@@ -155,12 +174,12 @@ impl Board {
         if self.stop {
             return;
         }
-        let next = self.next_position();
-        if next == None {
-            self.game_over();
-        } else {
-            self.snake.remove(0);
-            self.snake.push(next.unwrap());
+        match self.next_position() {
+            Some(position) => {
+                self.snake.remove(0);
+                self.snake.push(position);
+            }
+            None => self.game_over(),
         }
     }
 }
