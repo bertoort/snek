@@ -14,6 +14,7 @@ static CELL_SIZE: u32 = 10;
 static BOARD_COLOR: &str = "#B8D0EB";
 static SNAKE_COLOR: &str = "#6F2DBD";
 static APPLE_COLOR: &str = "#FF6666";
+static mut DIRECTION: &str = "right";
 
 pub enum Cell {
     Space,
@@ -21,6 +22,7 @@ pub enum Cell {
     Apple,
 }
 
+#[derive(Clone)]
 pub enum Direction {
     Up,
     Down,
@@ -65,11 +67,14 @@ impl Canvas {
             .unwrap();
         Canvas { game, context }
     }
-    pub fn init(&self) {
+    pub fn init(&mut self) {
         self.add_key_bindings();
         self.draw();
     }
     pub fn update(&mut self) {
+        unsafe {
+            self.game.set_direction(DIRECTION);
+        }
         self.game.tick();
         self.draw();
     }
@@ -99,7 +104,26 @@ impl Canvas {
 
         self.context.stroke()
     }
-    fn add_key_bindings(&self) {}
+    fn add_key_bindings(&mut self) {
+        let document = web_sys::window().unwrap().document().unwrap();
+        let change_direction = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
+            let key: &str = &event.key();
+            log(&format!("Key down: {}", key));
+            unsafe {
+                match key {
+                    "w" | "ArrowUp" => DIRECTION = "up",
+                    "a" | "ArrowLeft" => DIRECTION = "left",
+                    "s" | "ArrowDown" => DIRECTION = "down",
+                    "d" | "ArrowRight" => DIRECTION = "right",
+                    _ => (),
+                };
+            }
+        }) as Box<dyn FnMut(_)>);
+        document
+            .add_event_listener_with_callback("keydown", change_direction.as_ref().unchecked_ref())
+            .unwrap();
+        change_direction.forget();
+    }
 }
 
 #[wasm_bindgen]
@@ -181,5 +205,27 @@ impl Game {
             }
             None => self.game_over(),
         }
+    }
+    fn is_valid_direction(&self, dir: &str) -> bool {
+        match (dir, self.direction.clone()) {
+            ("left", Direction::Right) => return false,
+            ("right", Direction::Left) => return false,
+            ("down", Direction::Up) => return false,
+            ("up", Direction::Down) => return false,
+            _ => (),
+        };
+        return true;
+    }
+    pub fn set_direction(&mut self, dir: &str) {
+        if !self.is_valid_direction(dir) {
+            return;
+        }
+        match dir {
+            "left" => self.direction = Direction::Left,
+            "right" => self.direction = Direction::Right,
+            "down" => self.direction = Direction::Down,
+            "up" => self.direction = Direction::Up,
+            _ => (),
+        };
     }
 }
